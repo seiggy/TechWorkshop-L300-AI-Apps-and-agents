@@ -1,0 +1,54 @@
+name: Run Cart Manager Agent
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "src/app/agents/cartManagerAgent_initializer.py"
+      - "src/prompts/CartManagerPrompt.txt"
+
+jobs:
+  run-cart-manager-agent:
+    runs-on: ubuntu-latest
+
+    # Run all shell steps from within the src directory so Python imports line up
+    defaults:
+      run:
+        working-directory: src
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: Create .env file from secret
+        run: 'echo "$ENV" > .env'
+        shell: bash
+        env:
+          ENV: ${{ secrets.ENV }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          if [ -f requirements.txt ]; then
+            pip install -r requirements.txt
+          else
+            # Fallback if there is no requirements.txt or it's incomplete
+            pip install azure-ai-projects azure-identity azure-ai-agents python-dotenv
+
+      # Login so DefaultAzureCredential can obtain a token via OIDC
+      # Configure these GitHub secrets with a federated-credential-enabled app registration:
+      #   AZURE_CLIENT_ID, AZURE_TENANT_ID, AZURE_SUBSCRIPTION_ID
+      - name: Azure login (OIDC)
+        uses: azure/login@v2.1.1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Run cart manager agent initializer
+        run: |
+          python -m app.agents.cartManagerAgent_initializer

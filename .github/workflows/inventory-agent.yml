@@ -1,0 +1,54 @@
+name: Run Inventory Agent
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "src/app/agents/inventoryAgent_initializer.py"
+      - "src/prompts/InventoryAgentPrompt.txt"
+
+jobs:
+  run-inventory-agent:
+    runs-on: ubuntu-latest
+
+    # Run steps from within src so imports like app.agents... work cleanly
+    defaults:
+      run:
+        working-directory: src
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Create .env file from secret
+        run: 'echo "$ENV" > .env'
+        shell: bash
+        env:
+          ENV: ${{ secrets.ENV }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          if [ -f requirements.txt ]; then
+            pip install -r requirements.txt
+          else
+            # Minimal fallback if requirements.txt is missing or incomplete
+            pip install azure-ai-projects azure-identity azure-ai-agents python-dotenv
+
+      # Allow DefaultAzureCredential (used by azure.ai.projects) to obtain a token via OIDC
+      # Configure these GitHub secrets to point to an Entra ID app registration with
+      # a federated credential for this repository.
+      - name: Azure login (OIDC)
+        uses: azure/login@v2.1.1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Run inventory agent initializer
+        run: |
+          python -m app.agents.inventoryAgent_initializer
